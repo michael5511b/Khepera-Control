@@ -1,3 +1,4 @@
+
 #include <khepera/khepera.h>
 #include <signal.h>
 
@@ -7,15 +8,11 @@
 #include <stdlib.h>
 #include <netinet/in.h>
 #include <string.h>
-#include <sys/types.h>
-#include <errno.h>
-#include <arpa/inet.h>
 
 #include <math.h>
 //#include<vector>
 
 #define PORT 3000
-#define MAXLINE 1024 
 #define KH4_GYRO_DEG_S   (66.0/1000.0)
 
 static knet_dev_t * dsPic;
@@ -40,7 +37,6 @@ static void ctrlc_handler( int sig )
 
 /*------------------- Time Value Difference -----------*/
 /* Compute time difference
-
  * \param difference difference between the two times, in structure timeval type
  * \param end_time end time
  * \param start_time start time
@@ -209,7 +205,7 @@ void getSPD(unsigned int * spdL, unsigned int * spdR) {
 	//printf("\n");
 }
 
-/*-------------------Establish TCP/IP socket communication as server-------------------*/
+/*-------------------Establish socket communication as server-------------------*/
 void socketCommunicationServer(int * new_socket) {
 	int server_fd, valread;
 	struct sockaddr_in address;
@@ -253,7 +249,7 @@ void socketCommunicationServer(int * new_socket) {
 	}
 }
 
-/*-------------------Establish TCP/IP socket communication as client-------------------*/
+/*-------------------Establish socket communication as client-------------------*/
 void socketCommunicationClient(int * sock) {
 	int valread; 
     struct sockaddr_in serv_addr; 
@@ -284,60 +280,6 @@ void socketCommunicationClient(int * sock) {
     //printf("Hello message sent\n"); 
     //valread = read( *sock , buffer, 1024); 
     //printf("%s\n",buffer ); 
-}
-
-/*-------------------Establish UDP socket communication as client-------------------*/
-void UDP_Client(int * sockfd, struct sockaddr_in * servaddr) {
-	// int sockfd; 
-    char buffer[MAXLINE]; 
-    char *hello = "Hello from client"; 
-    // struct sockaddr_in     servaddr; 
-    
-    
-    // Creating socket file descriptor 
-    if ( (*sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0 ) { 
-        perror("socket creation failed"); 
-        exit(EXIT_FAILURE); 
-    } 
-
-
-  
-    memset(servaddr, 0, sizeof(*servaddr)); 
-    
-	// Convert IPv4 and IPv6 addresses from text to binary form 
-    if(inet_pton(AF_INET, "192.168.1.142", &(*servaddr).sin_addr)<=0)  
-    { 
-        printf("\nInvalid address/ Address not supported \n"); 
-        return; 
-    } 
-  	struct timeval tv;
-	tv.tv_sec = 0;
-	tv.tv_usec = 50000;
-    if (setsockopt(*sockfd, SOL_SOCKET, SO_RCVTIMEO,&tv,sizeof(tv)) < 0) {
-    	perror("Error");
-	}
-    // Filling server information 
-    servaddr -> sin_family = AF_INET; 
-    servaddr -> sin_port = htons(PORT); 
-    //servaddr.sin_addr.s_addr = INADDR_ANY; 
-    // servaddr.sin_addr.s_addr = ((struct in_addr *)host->h_addr);
-    
-    /*
-    int n, len; 
-      
-    sendto(*sockfd, (const char *)hello, strlen(hello), 
-        MSG_CONFIRM, (const struct sockaddr *) servaddr,  
-            sizeof(*servaddr)); 
-    printf("Hello message sent.\n"); 
-          
-    n = recvfrom(*sockfd, (char *)buffer, MAXLINE,  
-                MSG_WAITALL, (struct sockaddr *) servaddr, 
-                &len); 
-    buffer[n] = '\0'; 
-    printf("Server : %s\n", buffer); 
-  	*/
-    // close(*sockfd); 
-    //return; 
 }
 
 /*------------Sending sensor values to client in one big string-------------*/
@@ -469,141 +411,6 @@ void sendSensor(int new_socket, long double T, double acc_X, double acc_Y, doubl
 	char *p = text;
 	int len = strlen(p);
 	send(new_socket , p, len , 0 );
-
-}
-
-/*------------Sending sensor values to UDP server in one big string-------------*/
-void UDPsendSensor(int UDP_sockfd, struct sockaddr_in servaddr, long double T, double acc_X, double acc_Y, double acc_Z, double gyro_X, double gyro_Y, double gyro_Z, unsigned int posL, unsigned int posR, unsigned int spdL, unsigned int spdR, short usValues[], int irValues[]) {
-	char text[4096];
-
-	// Time stamp
-	sprintf(text, "T");
-	sprintf(text + strlen(text), "%2.4f", T);
-	sprintf(text + strlen(text), "T");
-
-
-	// Accelerometer
-	
-	sprintf(text + strlen(text), "AX");
-	sprintf(text + strlen(text), "%2.4f", acc_X);
-	sprintf(text + strlen(text), "AX");
-
-	sprintf(text + strlen(text), "AY");
-	sprintf(text + strlen(text), "%2.4f", acc_Y);
-	sprintf(text + strlen(text), "AY");
-
-	sprintf(text + strlen(text), "AZ");
-	sprintf(text + strlen(text), "%2.4f", acc_Z);
-	sprintf(text + strlen(text), "AZ");
-
-	// Gyroscope
-	sprintf(text + strlen(text), "GX");
-	sprintf(text + strlen(text), "%2.4f", gyro_X);
-	sprintf(text + strlen(text), "GX");
-
-	sprintf(text + strlen(text), "GY");
-	sprintf(text + strlen(text), "%2.4f", gyro_Y);
-	sprintf(text + strlen(text), "GY");
-
-	sprintf(text + strlen(text), "GZ");
-	sprintf(text + strlen(text), "%2.4f", gyro_Z);
-	sprintf(text + strlen(text), "GZ");
-
-	// Encoders
-	sprintf(text + strlen(text), "PL");
-	sprintf(text + strlen(text), "%d", posL);
-	sprintf(text + strlen(text), "PL");
-
-	sprintf(text + strlen(text), "PR");
-	sprintf(text + strlen(text), "%d", posR);
-	sprintf(text + strlen(text), "PR");
-
-	sprintf(text + strlen(text), "SL");
-	sprintf(text + strlen(text), "%d", spdL);
-	sprintf(text + strlen(text), "SL");
-
-	sprintf(text + strlen(text), "SR");
-	sprintf(text + strlen(text), "%d", spdR);
-	sprintf(text + strlen(text), "SR");
-
-	// Ultrasonic sensor
-	sprintf(text + strlen(text), "UA");
-	sprintf(text + strlen(text), "%d", usValues[0]);
-	sprintf(text + strlen(text), "UA");
-
-	sprintf(text + strlen(text), "UB");
-	sprintf(text + strlen(text), "%d", usValues[1]);
-	sprintf(text + strlen(text), "UB");
-
-	sprintf(text + strlen(text), "UC");
-	sprintf(text + strlen(text), "%d", usValues[2]);
-	sprintf(text + strlen(text), "UC");
-
-	sprintf(text + strlen(text), "UD");
-	sprintf(text + strlen(text), "%d", usValues[3]);
-	sprintf(text + strlen(text), "UD");
-
-	sprintf(text + strlen(text), "UE");
-	sprintf(text + strlen(text), "%d", usValues[4]);
-	sprintf(text + strlen(text), "UE");
-
-	// Infrared sensor
-	sprintf(text + strlen(text), "IA");
-	sprintf(text + strlen(text), "%d", irValues[0]);
-	sprintf(text + strlen(text), "IA");
-
-	sprintf(text + strlen(text), "IB");
-	sprintf(text + strlen(text), "%d", irValues[1]);
-	sprintf(text + strlen(text), "IB");
-
-	sprintf(text + strlen(text), "IC");
-	sprintf(text + strlen(text), "%d", irValues[2]);
-	sprintf(text + strlen(text), "IC");
-
-	sprintf(text + strlen(text), "ID");
-	sprintf(text + strlen(text), "%d", irValues[3]);
-	sprintf(text + strlen(text), "ID");
-
-	sprintf(text + strlen(text), "IE");
-	sprintf(text + strlen(text), "%d", irValues[4]);
-	sprintf(text + strlen(text), "IE");
-
-	sprintf(text + strlen(text), "IF");
-	sprintf(text + strlen(text), "%d", irValues[5]);
-	sprintf(text + strlen(text), "IF");
-
-	sprintf(text + strlen(text), "IG");
-	sprintf(text + strlen(text), "%d", irValues[6]);
-	sprintf(text + strlen(text), "IG");
-
-	sprintf(text + strlen(text), "IH");
-	sprintf(text + strlen(text), "%d", irValues[7]);
-	sprintf(text + strlen(text), "IH");
-
-	sprintf(text + strlen(text), "II");
-	sprintf(text + strlen(text), "%d", irValues[8]);
-	sprintf(text + strlen(text), "II");
-
-	sprintf(text + strlen(text), "IJ");
-	sprintf(text + strlen(text), "%d", irValues[9]);
-	sprintf(text + strlen(text), "IJ");
-
-	sprintf(text + strlen(text), "IK");
-	sprintf(text + strlen(text), "%d", irValues[10]);
-	sprintf(text + strlen(text), "IK");
-
-	sprintf(text + strlen(text), "IL");
-	sprintf(text + strlen(text), "%d", irValues[11]);
-	sprintf(text + strlen(text), "IL");
-	
-
-	// Have char pointer p point to the whole text, send it to the client
-	char *p = text;
-	int len = strlen(p);
-	sendto(UDP_sockfd, (const char *)p, len, 
-        MSG_CONFIRM, (const struct sockaddr *) &servaddr,  
-            sizeof(servaddr)); 
-
 }
 
 /*---------------- Receiving and parsing from client -----------------*/
@@ -646,30 +453,7 @@ void recvParseFromServer(int new_socket, double * W, double * V) {
 	memset(sock_buffer, 0, sizeof sock_buffer);
 }
 
-/*---------------- Receiving and parsing from sever -----------------*/
-
-void UDPrecvParseFromServer(int UDP_sockfd, struct sockaddr_in servaddr, double * W, double * V) {
-	char sock_buffer[1024];
-	char *pch;
-	double recv[2];
-	int i = 0;
-	int n, len;
-
-	n = recvfrom(UDP_sockfd, (char *)sock_buffer, MAXLINE, MSG_WAITALL, (struct sockaddr *) &servaddr, &len); 
-
-	pch = strtok (sock_buffer,"x");
-	while (pch != NULL)
-	{
-	    recv[i] = atof(pch);
-	    i++;
-	    pch = strtok (NULL, "x");
-	}
-	*W = recv[0];
-	*V = recv[1];
-	memset(sock_buffer, 0, sizeof sock_buffer);
-}
-
-
+/*---------------- Time Grid -----------------*/
 
 
 /*----------------Main Program-----------------*/
@@ -710,14 +494,12 @@ int main(int argc, char *argv[]) {
 
   	// Establish socket communication
   	int new_socket;
-  	int UDP_sockfd;
   	char sock_buffer[1024] = {0};
-  	struct sockaddr_in     servaddr; 
   	//socketCommunicationServer(&new_socket);
-  	//socketCommunicationClient(&new_socket);
-  	UDP_Client(&UDP_sockfd, &servaddr);
+  	socketCommunicationClient(&new_socket);
+  
 
-  	
+
     // Initialize a Buffer to store all the data collected from
     // the sensors by the dsPIC
     char acc_Buffer[100]; // Buffer for accelerometer
@@ -772,11 +554,9 @@ int main(int argc, char *argv[]) {
 			getGyro(gyro_Buffer, &gyro_X, &gyro_Y, &gyro_Z);
 			getEC(&posL, &posR);
 			getSPD(&spdL, &spdR);			
-			// sendSensor(new_socket, T, acc_X, acc_Y, acc_Z, gyro_X, gyro_Y, gyro_Z, posL, posR, spdL, spdR, usValues, irValues);
-			UDPsendSensor(UDP_sockfd, servaddr, T, acc_X, acc_Y, acc_Z, gyro_X, gyro_Y, gyro_Z, posL, posR, spdL, spdR, usValues, irValues);
+			sendSensor(new_socket, T, acc_X, acc_Y, acc_Z, gyro_X, gyro_Y, gyro_Z, posL, posR, spdL, spdR, usValues, irValues);
 			//printf("Grid Time: %Lf \n\n", T);
-			// recvParseFromServer(new_socket, &W, &V);
-			UDPrecvParseFromServer(UDP_sockfd, servaddr, &W, &V);
+			recvParseFromServer(new_socket, &W, &V);
 			Ang_Vel_Control(W, V);
 			cnt++;
 		}
@@ -785,9 +565,7 @@ int main(int argc, char *argv[]) {
 			cnt++;
 		}
 		
-		
-		
-		
+
 		
 		//----------------- Action received by Python ------------------//
 
@@ -837,8 +615,7 @@ int main(int argc, char *argv[]) {
   	// It will still return the pressed key immediately
   	// even at the root@r1:~/tests#
   	// resulting in no characters showing up even if you press any keys on keyboard
-  	//close(new_socket);
-  	close(UDP_sockfd);
+  	close(new_socket);
 
   	kb_change_term_mode(0);
 
