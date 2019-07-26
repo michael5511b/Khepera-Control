@@ -1,6 +1,5 @@
 #include <khepera/khepera.h>
 #include <signal.h>
-
 #include <unistd.h>
 #include <stdio.h>
 #include <sys/socket.h>
@@ -10,9 +9,7 @@
 #include <sys/types.h>
 #include <errno.h>
 #include <arpa/inet.h>
-
 #include <math.h>
-//#include<vector>
 
 #define PORT 3000
 #define MAXLINE 1024 
@@ -20,6 +17,7 @@
 
 static knet_dev_t * dsPic;
 static int quitReq = 0; // quit variable for loop
+
 
 /*--------------------------------------------------------------------*/
 /* Make sure the program terminate properly on a ctrl-c */
@@ -48,6 +46,7 @@ static void ctrlc_handler( int sig )
  * \return difference between the two times in [us] */
 long long timeval_diff(struct timeval *difference, struct timeval *end_time, struct timeval *start_time)
 {
+	// timeval is a time structure that is commonly used in low level c
 	struct timeval temp_diff;
 
 	if(difference == NULL) {
@@ -65,7 +64,7 @@ long long timeval_diff(struct timeval *difference, struct timeval *end_time, str
 	}
 
 	return 1000000LL * difference -> tv_sec + difference -> tv_usec;
-} /* timeval_diff() */
+}
 
 
 
@@ -210,7 +209,7 @@ void getSPD(unsigned int * spdL, unsigned int * spdR) {
 }
 
 /*-------------------Establish TCP/IP socket communication as server-------------------*/
-void socketCommunicationServer(int * new_socket) {
+void TCPsocketCommunicationServer(int * new_socket) {
 	int server_fd, valread;
 	struct sockaddr_in address;
 	int opt = 1;
@@ -254,7 +253,7 @@ void socketCommunicationServer(int * new_socket) {
 }
 
 /*-------------------Establish TCP/IP socket communication as client-------------------*/
-void socketCommunicationClient(int * sock) {
+void TCPsocketCommunicationClient(int * sock) {
 	int valread; 
     struct sockaddr_in serv_addr; 
     char *hello = "HELLO"; 
@@ -280,19 +279,10 @@ void socketCommunicationClient(int * sock) {
         printf("\nConnection Failed \n"); 
         return; 
     } 
-    //send(*sock , hello , strlen(hello) , 0 ); 
-    //printf("Hello message sent\n"); 
-    //valread = read( *sock , buffer, 1024); 
-    //printf("%s\n",buffer ); 
 }
 
 /*-------------------Establish UDP socket communication as client-------------------*/
-void UDP_Client(int * sockfd, struct sockaddr_in * servaddr) {
-	// int sockfd; 
-    char buffer[MAXLINE]; 
-    char *hello = "Hello from client"; 
-    // struct sockaddr_in     servaddr; 
-    
+void UDP_Client(int * sockfd, struct sockaddr_in * servaddr) {    
     
     // Creating socket file descriptor 
     if ( (*sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0 ) { 
@@ -300,49 +290,42 @@ void UDP_Client(int * sockfd, struct sockaddr_in * servaddr) {
         exit(EXIT_FAILURE); 
     } 
 
-
-  
+    // Clear servaddr just in case
     memset(servaddr, 0, sizeof(*servaddr)); 
     
 	// Convert IPv4 and IPv6 addresses from text to binary form 
+	// Give the client the server's address to send to
     if(inet_pton(AF_INET, "192.168.1.142", &(*servaddr).sin_addr)<=0)  
     { 
         printf("\nInvalid address/ Address not supported \n"); 
         return; 
     } 
+
+    // Set a timeout time for the UDP socket when receiving
+  	// timeval is a common structure for time when dealing with low level c
+  	// it stores the time in both seconds and microseconds
   	struct timeval tv;
 	tv.tv_sec = 0;
-	tv.tv_usec = 50000;
+	tv.tv_usec = 50000; // 50 ms
     if (setsockopt(*sockfd, SOL_SOCKET, SO_RCVTIMEO,&tv,sizeof(tv)) < 0) {
     	perror("Error");
 	}
+
+
     // Filling server information 
     servaddr -> sin_family = AF_INET; 
     servaddr -> sin_port = htons(PORT); 
-    //servaddr.sin_addr.s_addr = INADDR_ANY; 
-    // servaddr.sin_addr.s_addr = ((struct in_addr *)host->h_addr);
-    
-    /*
-    int n, len; 
-      
-    sendto(*sockfd, (const char *)hello, strlen(hello), 
-        MSG_CONFIRM, (const struct sockaddr *) servaddr,  
-            sizeof(*servaddr)); 
-    printf("Hello message sent.\n"); 
-          
-    n = recvfrom(*sockfd, (char *)buffer, MAXLINE,  
-                MSG_WAITALL, (struct sockaddr *) servaddr, 
-                &len); 
-    buffer[n] = '\0'; 
-    printf("Server : %s\n", buffer); 
-  	*/
-    // close(*sockfd); 
-    //return; 
 }
 
 /*------------Sending sensor values to client in one big string-------------*/
-void sendSensor(int new_socket, long double T, double acc_X, double acc_Y, double acc_Z, double gyro_X, double gyro_Y, double gyro_Z, unsigned int posL, unsigned int posR, unsigned int spdL, unsigned int spdR, short usValues[], int irValues[]) {
+void TCPsendSensor(int new_socket, long double T, double acc_X, double acc_Y, double acc_Z, double gyro_X, double gyro_Y, double gyro_Z, unsigned int posL, unsigned int posR, unsigned int spdL, unsigned int spdR, short usValues[], int irValues[]) {
 	char text[4096];
+
+	// Separate sensor readings with "tags"
+	// EX: "-----AY2.5AY-------"
+	// The python server can do: AY = data.split('AY')[1]
+	// Which splits the data into [-----, 2.5, -------]
+	// then it gets the second index, [1], which is 2.5
 
 	// Time stamp
 	sprintf(text, "T");
@@ -351,7 +334,6 @@ void sendSensor(int new_socket, long double T, double acc_X, double acc_Y, doubl
 
 
 	// Accelerometer
-	
 	sprintf(text + strlen(text), "AX");
 	sprintf(text + strlen(text), "%2.4f", acc_X);
 	sprintf(text + strlen(text), "AX");
@@ -468,6 +450,8 @@ void sendSensor(int new_socket, long double T, double acc_X, double acc_Y, doubl
 	// Have char pointer p point to the whole text, send it to the client
 	char *p = text;
 	int len = strlen(p);
+
+	// Send the big chunk of sensor data string to server
 	send(new_socket , p, len , 0 );
 
 }
@@ -476,14 +460,18 @@ void sendSensor(int new_socket, long double T, double acc_X, double acc_Y, doubl
 void UDPsendSensor(int UDP_sockfd, struct sockaddr_in servaddr, long double T, double acc_X, double acc_Y, double acc_Z, double gyro_X, double gyro_Y, double gyro_Z, unsigned int posL, unsigned int posR, unsigned int spdL, unsigned int spdR, short usValues[], int irValues[]) {
 	char text[4096];
 
+	// Separate sensor readings with "tags"
+	// EX: "-----AY2.5AY-------"
+	// The python server can do: AY = data.split('AY')[1]
+	// Which splits the data into [-----, 2.5, -------]
+	// then it gets the second index, [1], which is 2.5
+
 	// Time stamp
 	sprintf(text, "T");
 	sprintf(text + strlen(text), "%2.4f", T);
 	sprintf(text + strlen(text), "T");
 
-
 	// Accelerometer
-	
 	sprintf(text + strlen(text), "AX");
 	sprintf(text + strlen(text), "%2.4f", acc_X);
 	sprintf(text + strlen(text), "AX");
@@ -600,20 +588,24 @@ void UDPsendSensor(int UDP_sockfd, struct sockaddr_in servaddr, long double T, d
 	// Have char pointer p point to the whole text, send it to the client
 	char *p = text;
 	int len = strlen(p);
-	sendto(UDP_sockfd, (const char *)p, len, 
-        MSG_CONFIRM, (const struct sockaddr *) &servaddr,  
-            sizeof(servaddr)); 
+
+	// Send the big chunk of sensor data string to server
+	sendto(UDP_sockfd, (const char *)p, len, MSG_CONFIRM, (const struct sockaddr *) &servaddr, sizeof(servaddr)); 
 
 }
 
 /*---------------- Receiving and parsing from client -----------------*/
-void recvParseFromClient(int new_socket, double * W, double * V) {
+void TCPrecvParseFromClient(int new_socket, double * W, double * V) {
 	char sock_buffer[1024];
 	char *pch;
 	double recv[2];
 	int i = 0;
+
+	// Receive data string from client 
 	read(new_socket , sock_buffer, 1024);
 
+	// Parsing the string
+	// The angular velocity (W) and linear velocity (V) are sent in the same string, separated by an 'x'
 	pch = strtok (sock_buffer,"x");
 	while (pch != NULL)
 	{
@@ -623,17 +615,23 @@ void recvParseFromClient(int new_socket, double * W, double * V) {
 	}
 	*W = recv[0];
 	*V = recv[1];
+
+	// Clear buffer
 	memset(sock_buffer, 0, sizeof sock_buffer);
 }
 
 /*---------------- Receiving and parsing from sever -----------------*/
-void recvParseFromServer(int new_socket, double * W, double * V) {
+void TCPrecvParseFromServer(int new_socket, double * W, double * V) {
 	char sock_buffer[1024];
 	char *pch;
 	double recv[2];
 	int i = 0;
+
+	// Receive data string from server 
 	read(new_socket , sock_buffer, 1024);
 
+	// Parsing the string
+	// The angular velocity (W) and linear velocity (V) are sent in the same string, separated by an 'x'
 	pch = strtok (sock_buffer,"x");
 	while (pch != NULL)
 	{
@@ -643,6 +641,8 @@ void recvParseFromServer(int new_socket, double * W, double * V) {
 	}
 	*W = recv[0];
 	*V = recv[1];
+
+	// Clear buffer
 	memset(sock_buffer, 0, sizeof sock_buffer);
 }
 
@@ -655,8 +655,11 @@ void UDPrecvParseFromServer(int UDP_sockfd, struct sockaddr_in servaddr, double 
 	int i = 0;
 	int n, len;
 
+	// Receive data string from server 
 	n = recvfrom(UDP_sockfd, (char *)sock_buffer, MAXLINE, MSG_WAITALL, (struct sockaddr *) &servaddr, &len); 
 
+	// Parsing the string
+	// The angular velocity (W) and linear velocity (V) are sent in the same string, separated by an 'x'
 	pch = strtok (sock_buffer,"x");
 	while (pch != NULL)
 	{
@@ -666,6 +669,8 @@ void UDPrecvParseFromServer(int UDP_sockfd, struct sockaddr_in servaddr, double 
 	}
 	*W = recv[0];
 	*V = recv[1];
+
+	// Clear buffer
 	memset(sock_buffer, 0, sizeof sock_buffer);
 }
 
@@ -688,6 +693,7 @@ int main(int argc, char *argv[]) {
     /* Init the khepera library */
 	if((rc = kb_init( argc , argv )) < 0 )
 		return 1;
+
 
 	/* Main Code */
   
@@ -713,8 +719,8 @@ int main(int argc, char *argv[]) {
   	int UDP_sockfd;
   	char sock_buffer[1024] = {0};
   	struct sockaddr_in     servaddr; 
-  	//socketCommunicationServer(&new_socket);
-  	//socketCommunicationClient(&new_socket);
+  	//TCPsocketCommunicationServer(&new_socket);
+  	//TCPsocketCommunicationClient(&new_socket);
   	UDP_Client(&UDP_sockfd, &servaddr);
 
   	
@@ -732,67 +738,73 @@ int main(int argc, char *argv[]) {
 
     unsigned int posL, posR;
     unsigned int spdL, spdR;
+
+    // Angular (W) and linear (V) velocity control parameters
     double W, V;
 
+    // Variables for time stamps
     struct timeval startt,endt;
-  
+  	long double T = 0.0;
+
     // Get the starting time stamp
     gettimeofday(&startt,0x0);
+    
 
-    long double T = 0.0;
+    // Variables for the time grid method by Jaskaran!
+    long double freq = 20.0; // The intended communication frequecy
+    int cnt = 0; // The current grid
+    long double delta = 0.01; // The max tolerance of the difference between acceptable time stamp and the grid
 
-    // Variables for the time grid
-    long double freq = 20.0;
-    int cnt = 0;
-    long double delta = 0.01;
 
     // Main Loop
     while(quitReq == 0) {
-		// Get current time stamp
 		
-
-		//printf("===============================================");
-		//printf("\nTime: %Lf\n\n", T);
-
-		// recvParseFromServer(new_socket, &W, &V);
-
+    	// Get current time stamp
 		gettimeofday(&endt,0x0);
-		// Print current time
 		long long t = timeval_diff(NULL, &endt, &startt);
 		T = t / 1000000.0;
 		//printf("Time: %Lf \n\n", T);
 
 
 		// Time Grid
+		// Only when the time stamp is close to the time grid, activate communication
 		long double diffTime = fabs(T - (cnt / freq));
-		// fmod(T , (1/freq))
 		
 		if(diffTime <= delta) {
+			// Read the sensors needed
 			getAcc(acc_Buffer, &acc_X, &acc_Y, &acc_Z);
 			getGyro(gyro_Buffer, &gyro_X, &gyro_Y, &gyro_Z);
 			getEC(&posL, &posR);
-			getSPD(&spdL, &spdR);			
-			// sendSensor(new_socket, T, acc_X, acc_Y, acc_Z, gyro_X, gyro_Y, gyro_Z, posL, posR, spdL, spdR, usValues, irValues);
+			getSPD(&spdL, &spdR);	
+
+			// Send sensor data		
 			UDPsendSensor(UDP_sockfd, servaddr, T, acc_X, acc_Y, acc_Z, gyro_X, gyro_Y, gyro_Z, posL, posR, spdL, spdR, usValues, irValues);
-			//printf("Grid Time: %Lf \n\n", T);
-			// recvParseFromServer(new_socket, &W, &V);
+			// TCPsendSensor(new_socket, T, acc_X, acc_Y, acc_Z, gyro_X, gyro_Y, gyro_Z, posL, posR, spdL, spdR, usValues, irValues);
+
+			// Receive linear and angular velocity commands from the server
 			UDPrecvParseFromServer(UDP_sockfd, servaddr, &W, &V);
+			// TCPrecvParseFromServer(new_socket, &W, &V);
+
+			// Control the motors
 			Ang_Vel_Control(W, V);
+
+			// Iterate to next time grid
 			cnt++;
 		}
-		
+		// If one time grid is skipped, iterate to next time grid
 		else if((T - (cnt / freq)) > delta) {
 			cnt++;
 		}
 		
 		
 		
-		
+		/*-------------------------------Useful Functions-----------------------------*/
 		
 		//----------------- Action received by Python ------------------//
 
 		// Receiving W and V from server 
-		//recvParseFromServer(new_socket, &W, &V);
+		//TCPrecvParseFromServer(new_socket, &W, &V);
+		//UDPrecvParseFromServer(UDP_sockfd, servaddr, &W, &V);
 		//printf("Input W: %f\n", W);
 		//printf("Input V: %f\n", V);
 		
@@ -820,26 +832,20 @@ int main(int argc, char *argv[]) {
 		// Receive encoder speed readings
 		//getSPD(&spdL, &spdR);
 
-		//sendSensor(new_socket, T, acc_X, acc_Y, acc_Z, gyro_X, gyro_Y, gyro_Z, posL, posR, spdL, spdR, usValues, irValues);
-
-		//printf("===============================================");
-		//printf("\n\n");
-		
-		
+		//TCPsendSensor(new_socket, T, acc_X, acc_Y, acc_Z, gyro_X, gyro_Y, gyro_Z, posL, posR, spdL, spdR, usValues, irValues);
+		//UDPsendSensor(UDP_sockfd, servaddr, T, acc_X, acc_Y, acc_Z, gyro_X, gyro_Y, gyro_Z, posL, posR, spdL, spdR, usValues, irValues);
+			
 		//usleep(15000); // wait 105 ms, time for gyro to read fresh data
-  	}
-	
-  	//Ang_Vel_Control(0, 0);
-	
+  	}	
+
+  	// Close UDP scoket
+  	close(UDP_sockfd);
 
   	// switch to normal key input mode
   	// This is important, if we don't switch the term mode back to zero
   	// It will still return the pressed key immediately
   	// even at the root@r1:~/tests#
   	// resulting in no characters showing up even if you press any keys on keyboard
-  	//close(new_socket);
-  	close(UDP_sockfd);
-
   	kb_change_term_mode(0);
 
   	// stop robot
